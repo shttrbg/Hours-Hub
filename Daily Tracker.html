@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daily Tracker</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--ink:#1d1d1b;--mute:#76746d;--line:#e4e2da;--acc:#2f6f5e;--accink:#fff;--warn:#b4492f;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171716;--card:#222220;--ink:#eeede8;--mute:#9a978e;--line:#34332f;--acc:#5fb59d;--accink:#10201b;--warn:#e58a72}}
+:root[data-theme="dark"]{--bg:#171716;--card:#222220;--ink:#eeede8;--mute:#9a978e;--line:#34332f;--acc:#5fb59d;--accink:#10201b;--warn:#e58a72}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:820px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 2px}
+.sub{color:var(--mute);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grow{flex:1}
+label{font-size:12px;color:var(--mute);display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+input,textarea,button{font:inherit;color:inherit}
+input[type=date],input[type=time],input[type=text],textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+textarea{min-height:90px;resize:vertical}
+button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:8px 14px;cursor:pointer}
+button.p{background:var(--acc);color:var(--accink);border-color:var(--acc);font-weight:600}
+button.x{border:none;background:none;color:var(--mute);padding:4px 8px}
+.big{font-size:20px;font-weight:700}
+.times{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:14px}
+.todo{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+.todo.done span{text-decoration:line-through;color:var(--mute)}
+.todo span{flex:1}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:520px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+tr.sel td{background:color-mix(in srgb,var(--acc) 12%,transparent)}
+tbody tr{cursor:pointer}
+td.n{max-width:180px;overflow:hidden;text-overflow:ellipsis;color:var(--mute)}
+h2{font-size:15px;margin:0 0 10px}
+.mute{color:var(--mute)}
+@media(max-width:480px){.times{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Daily Tracker</h1>
+  <p class="sub">Clock in, clock out, to-dos and notes. Saved in this browser.</p>
+
+  <div class="card">
+    <div class="row">
+      <div class="grow" style="min-width:150px"><label for="date">Date</label><input type="date" id="date"></div>
+      <div><label>Day</label><div class="big" id="day"></div></div>
+      <button id="today">Today</button>
+    </div>
+    <div class="times">
+      <div><label for="tin">Clock in</label><input type="time" id="tin"></div>
+      <div><label for="tout">Clock out</label><input type="time" id="tout"></div>
+      <div><label>Total</label><div class="big" id="total">–</div></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="p" id="cin">Clock in now</button>
+      <button id="cout">Clock out now</button>
+      <button class="x" id="clr">Clear times</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>To-do</h2>
+    <div class="row"><input type="text" id="newtodo" class="grow" placeholder="Add a task and press Enter"><button class="p" id="add">Add</button></div>
+    <div id="todos"></div>
+  </div>
+
+  <div class="card">
+    <h2>Notes</h2>
+    <textarea id="notes" placeholder="Notes for this day..."></textarea>
+  </div>
+
+  <div class="card">
+    <h2>Log</h2>
+    <div class="wrap"><table>
+      <thead><tr><th>Date</th><th>Day</th><th>In</th><th>Out</th><th>Hours</th><th>Tasks</th><th>Notes</th></tr></thead>
+      <tbody id="log"></tbody>
+    </table></div>
+    <p class="mute" id="sum" style="margin:10px 0 0"></p>
+  </div>
+</main>
+<script>
+const KEY='daily-tracker-v1';
+const $=id=>document.getElementById(id);
+const DAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+let data={};
+try{data=JSON.parse(localStorage.getItem(KEY))||{}}catch(e){data={}}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){}};
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const nowT=()=>{const d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes())};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dayName=k=>DAYS[new Date(k+'T00:00:00').getDay()];
+let sel=iso(new Date());
+const rec=k=>data[k]||(data[k]={in:'',out:'',todos:[],notes:''});
+const mins=r=>{if(!r.in||!r.out)return null;const[a,b]=r.in.split(':').map(Number),[c,d]=r.out.split(':').map(Number);let m=(c*60+d)-(a*60+b);if(m<0)m+=1440;return m};
+const hm=m=>m==null?'–':Math.floor(m/60)+'h '+pad(m%60)+'m';
+
+function render(){
+  const r=rec(sel);
+  $('date').value=sel;$('day').textContent=dayName(sel);
+  $('tin').value=r.in;$('tout').value=r.out;$('total').textContent=hm(mins(r));
+  if(document.activeElement!==$('notes'))$('notes').value=r.notes;
+  $('todos').innerHTML=r.todos.length?r.todos.map((t,i)=>
+    `<div class="todo ${t.d?'done':''}"><input type="checkbox" data-i="${i}" ${t.d?'checked':''}><span>${esc(t.t)}</span><button class="x" data-del="${i}" aria-label="Delete">✕</button></div>`).join('')
+    :'<p class="mute" style="margin:10px 0 0">No tasks yet.</p>';
+  const keys=Object.keys(data).filter(k=>{const x=data[k];return x.in||x.out||x.todos.length||x.notes}).sort().reverse();
+  let tot=0;
+  $('log').innerHTML=keys.map(k=>{const x=data[k],m=mins(x);if(m)tot+=m;
+    const dn=x.todos.filter(t=>t.d).length;
+    return `<tr data-k="${k}" class="${k===sel?'sel':''}"><td>${k}</td><td>${dayName(k).slice(0,3)}</td><td>${x.in||'–'}</td><td>${x.out||'–'}</td><td>${hm(m)}</td><td>${x.todos.length?dn+'/'+x.todos.length:'–'}</td><td class="n">${esc(x.notes.split('\n')[0]||'')}</td></tr>`}).join('')
+    ||'<tr><td colspan="7" class="mute">Nothing logged yet.</td></tr>';
+  $('sum').textContent=keys.length?`${keys.length} day${keys.length>1?'s':''} logged · ${hm(tot)} total`:'';
+}
+const upd=f=>{f(rec(sel));save();render()};
+
+$('date').onchange=e=>{if(e.target.value){sel=e.target.value;render()}};
+$('today').onclick=()=>{sel=iso(new Date());render()};
+$('tin').onchange=e=>upd(r=>r.in=e.target.value);
+$('tout').onchange=e=>upd(r=>r.out=e.target.value);
+$('cin').onclick=()=>{sel=iso(new Date());upd(r=>r.in=nowT())};
+$('cout').onclick=()=>{sel=iso(new Date());upd(r=>r.out=nowT())};
+$('clr').onclick=()=>upd(r=>{r.in='';r.out=''});
+const addTodo=()=>{const v=$('newtodo').value.trim();if(!v)return;$('newtodo').value='';upd(r=>r.todos.push({t:v,d:false}))};
+$('add').onclick=addTodo;
+$('newtodo').onkeydown=e=>{if(e.key==='Enter')addTodo()};
+$('todos').onclick=e=>{
+  const c=e.target.closest('input[data-i]'),d=e.target.closest('[data-del]');
+  if(c)upd(r=>r.todos[+c.dataset.i].d=c.checked);
+  if(d)upd(r=>r.todos.splice(+d.dataset.del,1));
+};
+$('notes').oninput=e=>{rec(sel).notes=e.target.value;save()};
+$('notes').onblur=render;
+$('log').onclick=e=>{const tr=e.target.closest('tr[data-k]');if(tr){sel=tr.dataset.k;render();scrollTo({top:0,behavior:'smooth'})}};
+render();
+</script>
+</body>
+</html>
